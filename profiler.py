@@ -86,9 +86,37 @@ def profile_results_to_dataframe(profile_results):
     return pandas.DataFrame(profile_results)
 
 
-def profile(func, num_runs=None, step=None):
+def plot(result_dataframe, path=None):
+    """
+    Plot results and save to .png.
+
+    :param path: str - path and filename to save image to, should end in ".png"
+    :param result_dataframe: pandas.DataFrame
+    :return: None
+    """
+    import matplotlib
+    # http://stackoverflow.com/a/39539491/3076390
+    matplotlib.use('Agg')
+    import ggplot
+
+    path = path or './plot.png'
+    colnames = result_dataframe.columns.values
+
+    plot = ggplot.ggplot(result_dataframe, ggplot.aes(x=colnames[0], y=colnames[1]))
+    plot + ggplot.geom_area()
+    plot.save(path)
+
+
+def profile(func, num_runs, step):
+    """
+    Call function {num_run} times with input that increases by len {step} each run.
+
+    :param func: function
+    :param num_runs: int
+    """
     profile_results = []
 
+    # TODO: profile concurrently in threads
     for run in xrange(1, num_runs + 1):
         input_size = run * step
         func_args = get_random_int_list(input_size)
@@ -109,11 +137,16 @@ if __name__ == '__main__':
     parser.add_argument(
         '--path', '-p', help='path to directory of module, if not same as script')
     parser.add_argument(
-        '--num_runs', '-n', type=int, default=10, help='run profiler {n} times')
+        '--num_runs', '-n', type=int, default=50, help='run profiler {n} times')
     parser.add_argument(
-        '--step', '-s', type=int, default=10, help='increase input size by {s} for run')
+        '--step', '-s', type=int, default=20, help='increase input size by {s} for run')
     args = parser.parse_args()
 
+    save_path = args.module + '.png'
     func = _get_function_from_module(args.module, args.function)
-    profile_results = profile(func, num_runs=args.num_runs, step=args.step)
-    print profile_results_to_dataframe(profile_results)
+    profile_results = profile(func, args.num_runs, args.step)
+    result_dataframe = profile_results_to_dataframe(profile_results)
+    plot(result_dataframe, save_path)
+
+    print result_dataframe
+    print 'plot saved to {}'.format(save_path)
