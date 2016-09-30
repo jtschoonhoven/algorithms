@@ -11,8 +11,7 @@ import os
 Algorithm profiler: measure how complexity depends on size of input.
 """
 
-
-logging.getLogger('trace').setLevel(logging.WARNING)
+ProfileResult = namedtuple('ProfileResult', ['size', 'num_executed_statements'])
 
 
 def _get_function_from_module(module_name, function_name=None, dir_path=None):
@@ -34,7 +33,7 @@ def _get_function_from_module(module_name, function_name=None, dir_path=None):
         # make sure to run the module manually to save changes in the source to .pyc
         filepath = os.path.join(dir_path, module_name) + '.pyc'
         module = imp.load_compiled(module_name, filepath)
-    except ImportError:
+    except (ImportError, IOError):
         filepath = os.path.join(dir_path, module_name) + '.py'
         module = imp.load_source(module_name, filepath)
 
@@ -45,7 +44,7 @@ def trace_function(func, *args, **kwargs):
     """
     :return: trace.CoverageResults
     """
-    tracer = trace.Trace()
+    tracer = trace.Trace(trace=False)
     tracer.runfunc(func, *args, **kwargs)
     trace_result = tracer.results()
 
@@ -54,7 +53,7 @@ def trace_function(func, *args, **kwargs):
 
 def num_executed_statements(trace_result):
     """
-    Given an instance of CoverageResults, return the sum of executed statements.
+    Given an instance of trace.CoverageResults, return the sum of executed statements.
 
     :param trace_result: trace.CoverageResults
     :return: int
@@ -75,18 +74,30 @@ def get_random_int_list(length):
     return int_list
 
 
+def profile_results_to_dataframe(profile_results):
+    """
+    Convert profile results to 2-column dataframe for plotting.
+
+    :param profile_results: ProfileResult[]
+    :return: pandas.DataFrame
+    """
+    # pandas is a big slow mess: only import it if necessary
+    import pandas
+    return pandas.DataFrame(profile_results)
+
+
 def profile(func, num_runs=None, step=None):
-    RunResult = namedtuple('TraceResult', ['input_size', 'num_executed_statements'])
-    run_result_list = []
+    profile_results = []
 
     for run in xrange(1, num_runs + 1):
         input_size = run * step
         func_args = get_random_int_list(input_size)
         trace_result = trace_function(func, func_args)
-        run_result = RunResult(input_size, num_executed_statements(trace_result))
-        run_result_list.append(run_result)
+        profile_result = ProfileResult(input_size, num_executed_statements(trace_result))
+        profile_results.append(profile_result)
 
-    return run_result_list
+    return profile_results
+
 
 if __name__ == '__main__':
     input_choices = ('random_int_list',)
@@ -104,4 +115,5 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     func = _get_function_from_module(args.module, args.function)
-    print profile(func, num_runs=args.num_runs, step=args.step)
+    profile_results = profile(func, num_runs=args.num_runs, step=args.step)
+    print profile_results_to_dataframe(profile_results)
