@@ -1,8 +1,9 @@
-import logging
 import argparse
 from collections import namedtuple
 import imp
+import Queue
 import random
+import threading
 import trace
 import os
 
@@ -11,7 +12,12 @@ import os
 Algorithm profiler: measure how complexity depends on size of input.
 """
 
+
 ProfileResult = namedtuple('ProfileResult', ['size', 'num_executed_statements'])
+
+NUM_THREADS = 20
+DEFAULT_NUM_RUNS = 100
+DEFAULT_STEP_SIZE = 1  # increase input length by this amount each run
 
 
 def _get_function_from_module(module_name, function_name=None, dir_path=None):
@@ -107,6 +113,27 @@ def plot(result_dataframe, path=None):
     plot.save(path)
 
 
+def _profile_worker(input_size_queue, result_queue):
+    """
+    Profile a function and put ProfileResults to result_queue. Run from a child thread.
+
+    Continues to call function for different input sizes until input_size_queue is empty.
+
+    :param input_size_queue: Queue.Queue - queue of integers of input size
+    :param result_queue: Queue.Queue - empty queue to put ProfileResults to
+    """
+    while True:
+        try:
+            input_size = input_size_queue.get(block=False)
+            func_args = get_random_int_list(input_size)
+            trace_result = trace_function(func, func_args)
+            num_executed = num_executed_statements(trace_result)
+            profile_result = ProfileResult(input_size, num_executed)
+            result_queue.put(profile_result)
+        except Queue.Empty:
+            break
+
+
 def profile(func, num_runs, step):
     """
     Call function {num_run} times with input that increases by len {step} each run.
@@ -114,32 +141,56 @@ def profile(func, num_runs, step):
     :param func: function
     :param num_runs: int
     """
-    profile_results = []
+    threads = []
+    results = []
+    input_size_queue = Queue.Queue()
+    result_queue = Queue.Queue()
 
-    # TODO: profile concurrently in threads
     for run in xrange(1, num_runs + 1):
         input_size = run * step
-        func_args = get_random_int_list(input_size)
-        trace_result = trace_function(func, func_args)
-        profile_result = ProfileResult(input_size, num_executed_statements(trace_result))
-        profile_results.append(profile_result)
+        input_size_queue.put(input_size)
 
-    return profile_results
+    for _ in xrange(NUM_THREADS):
+        thread = threading.Thread(
+            target=_profile_worker, args=[input_size_queue, result_queue])
+        thread.start()
+        threads.append(thread)
+
+    for thread in threads:
+        thread.join()
+
+    while True:
+        try:
+            result = result_queue.get(block=False)
+            results.append(result)
+        except Queue.Empty:
+            break
+
+    return sorted(results)
 
 
 if __name__ == '__main__':
     input_choices = ('random_int_list',)
     parser = argparse.ArgumentParser(description='Profile {function} in {module}.')
     parser.add_argument(
-        'module', help='name of module to import')
+        'module',
+        help='name of module to import')
     parser.add_argument(
-        '--function', '-f', help='name of function to profile, if not same as module')
+        '--function', '-f',
+        help='name of function to profile, if not same as module')
     parser.add_argument(
-        '--path', '-p', help='path to directory of module, if not same as script')
+        '--path', '-p',
+        help='path to directory of module, if not same as script')
     parser.add_argument(
-        '--num_runs', '-n', type=int, default=50, help='run profiler {n} times')
+        '--num_runs', '-n',
+        type=int,
+        default=DEFAULT_NUM_RUNS,
+        help='run profiler {n} times')
     parser.add_argument(
-        '--step', '-s', type=int, default=20, help='increase input size by {s} for run')
+        '--step', '-s',
+        type=int,
+        default=DEFAULT_STEP_SIZE,
+        help='increase input size by {s} each run')
     args = parser.parse_args()
 
     save_path = args.module + '.png'
