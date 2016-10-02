@@ -127,7 +127,6 @@ def plot(result_dataframe, title=None, save_path=None, **kwargs):
     import ggplot
 
     plot = ggplot.ggplot(result_dataframe, ggplot.aes(**kwargs))
-    plot + ggplot.ggtitle(title)
     plot + ggplot.geom_line(size=3)
     plot + ggplot.scale_y_continuous()
     plot + ggplot.scale_color_manual(values=['teal', 'MediumAquaMarine', 'coral'])
@@ -204,7 +203,7 @@ def profile(func, num_runs, step, sort_order):
     return sorted(results)
 
 
-def profile_and_plot(func, num_runs, step, title=None, save_path=None):
+def profile_and_plot(func, num_runs=None, step=None, title=None, save_path=None):
     """
     Shortcut function to profile {func} and plot results.
 
