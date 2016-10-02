@@ -119,11 +119,11 @@ def plot(result_dataframe, title=None, save_path=None, **kwargs):
 
     :param path: str - path and filename to save image to, should end in ".png"
     :param result_dataframe: pandas.DataFrame
-    :return: None
+    :return: ggplot.ggplot
     """
     import matplotlib
     # http://stackoverflow.com/a/39539491/3076390
-    matplotlib.use('Agg')
+    matplotlib.rcParams['backend'] = 'Agg'
     import ggplot
 
     plot = ggplot.ggplot(result_dataframe, ggplot.aes(**kwargs))
@@ -135,8 +135,10 @@ def plot(result_dataframe, title=None, save_path=None, **kwargs):
     if save_path:
         plot.save(save_path)
 
+    return plot
 
-def _profile_worker(input_size_queue, result_queue, sort_order):
+
+def _profile_worker(func, input_size_queue, result_queue, sort_order):
     """
     Profile a function and put ProfileResults to result_queue. Run from a child thread.
 
@@ -182,7 +184,8 @@ def profile(func, num_runs, step, sort_order):
     # start {NUM_THREADS} profile workers
     for _ in xrange(NUM_THREADS):
         thread = threading.Thread(
-            target=_profile_worker, args=[input_size_queue, result_queue, sort_order])
+            target=_profile_worker,
+            args=[func, input_size_queue, result_queue, sort_order])
         thread.start()
         threads.append(thread)
 
@@ -199,6 +202,38 @@ def profile(func, num_runs, step, sort_order):
             break
 
     return sorted(results)
+
+
+def profile_and_plot(func, num_runs, step, title=None, save_path=None):
+    """
+    Shortcut function to profile {func} and plot results.
+
+    :param func: function - must accept an integer list as only argument
+    :param num_runs: int
+    :param step: int
+    :param title: str
+    :param save_path: str - if present, plot will be saved to this path
+    :return: None
+    """
+    results = {
+        'best_case': profile(func, num_runs, step, 'ascending'),
+        'worst_case': profile(func, num_runs, step, 'descending'),
+        'random': profile(func, num_runs, step, 'random'),
+    }
+
+    result_dataframe = profile_results_to_dataframe(**results)
+    mapping = {
+        'x': INPUT_MEASURE_NAME,
+        'y': COMPLEXITY_MEASURE_NAME,
+        'color': CASE_NAME,
+    }
+
+    chart = plot(result_dataframe, title=title, save_path=save_path, **mapping)
+
+    if save_path:
+        print 'plot saved to {}'.format(save_path)
+    else:
+        print chart
 
 
 if __name__ == '__main__':
@@ -227,21 +262,4 @@ if __name__ == '__main__':
 
     save_path = args.module + '.png'
     func = _get_function_from_module(args.module, args.function)
-
-    results = {
-        'best_case': profile(func, args.num_runs, args.step, 'ascending'),
-        'worst_case': profile(func, args.num_runs, args.step, 'descending'),
-        'random': profile(func, args.num_runs, args.step, 'random'),
-    }
-
-    result_dataframe = profile_results_to_dataframe(**results)
-    mapping = {
-        'x': INPUT_MEASURE_NAME,
-        'y': COMPLEXITY_MEASURE_NAME,
-        'color': CASE_NAME,
-    }
-
-    plot(result_dataframe, title=args.module, save_path=save_path, **mapping)
-
-    print result_dataframe
-    print 'plot saved to {}'.format(save_path)
+    profile_and_plot(func, args.num_runs, args.step, args.module, save_path)
