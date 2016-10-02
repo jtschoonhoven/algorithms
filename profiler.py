@@ -9,15 +9,23 @@ import os
 
 
 """
-Algorithm profiler: measure how complexity depends on size of input.
+Algorithm profiler: measure how runtime complexity varies with size of input.
+
+CAUTION: counts lines of executed code, NOT actual number of computations.
+Comprehensions and builtin functions will count as a single statement.
 """
 
-
-ProfileResult = namedtuple('ProfileResult', ['size', 'num_executed_statements'])
 
 NUM_THREADS = 20
 DEFAULT_NUM_RUNS = 100
 DEFAULT_STEP_SIZE = 1  # increase input length by this amount each run
+
+# labels used in metrics and charts
+INPUT_MEASURE_NAME = 'input_size'
+COMPLEXITY_MEASURE_NAME = 'num_executed_statements'
+CASE_NAME = 'case'
+
+ProfileResult = namedtuple('ProfileResult', [INPUT_MEASURE_NAME, COMPLEXITY_MEASURE_NAME])
 
 
 def _get_function_from_module(module_name, function_name=None, dir_path=None):
@@ -67,32 +75,45 @@ def num_executed_statements(trace_result):
     return sum(x for x in trace_result.counts.values())
 
 
-def get_random_int_list(length):
+def get_int_list(length, sort_order='random'):
     """
     Return a list of all integers, 0-{length - 1}, ordered randomly.
 
     :param length: int
+    :param sort_order: str - ["random"|"ascending"|"descending"]
     :return: int[]
     """
+    assert sort_order in ('random', 'ascending', 'descending')
+
     int_list = range(length)
-    random.shuffle(int_list)
+    if sort_order == 'random':
+        random.shuffle(int_list)
+    elif sort_order == 'descending':
+        int_list.reverse()
 
     return int_list
 
 
-def profile_results_to_dataframe(profile_results):
+def profile_results_to_dataframe(**kwargs):
     """
-    Convert profile results to 2-column dataframe for plotting.
+    Convert profile results to dataframe for plotting.
 
     :param profile_results: ProfileResult[]
     :return: pandas.DataFrame
     """
     # pandas is a big slow mess: only import it if necessary
-    import pandas
-    return pandas.DataFrame(profile_results)
+    import pandas as pd
+
+    merged_dataframe = pd.DataFrame()
+    for profile_type, profile_results in kwargs.iteritems():
+        df = pd.DataFrame(profile_results)
+        df[CASE_NAME] = profile_type
+        merged_dataframe = merged_dataframe.append(df)
+
+    return merged_dataframe
 
 
-def plot(result_dataframe, path=None):
+def plot(result_dataframe, title=None, save_path=None, **kwargs):
     """
     Plot results and save to .png.
 
@@ -105,15 +126,17 @@ def plot(result_dataframe, path=None):
     matplotlib.use('Agg')
     import ggplot
 
-    path = path or './plot.png'
-    colnames = result_dataframe.columns.values
+    plot = ggplot.ggplot(result_dataframe, ggplot.aes(**kwargs))
+    plot + ggplot.ggtitle(title)
+    plot + ggplot.geom_line(size=3)
+    plot + ggplot.scale_y_continuous()
+    plot + ggplot.scale_color_manual(values=['teal', 'MediumAquaMarine', 'coral'])
 
-    plot = ggplot.ggplot(result_dataframe, ggplot.aes(x=colnames[0], y=colnames[1]))
-    plot + ggplot.geom_area()
-    plot.save(path)
+    if save_path:
+        plot.save(save_path)
 
 
-def _profile_worker(input_size_queue, result_queue):
+def _profile_worker(input_size_queue, result_queue, sort_order):
     """
     Profile a function and put ProfileResults to result_queue. Run from a child thread.
 
@@ -121,11 +144,12 @@ def _profile_worker(input_size_queue, result_queue):
 
     :param input_size_queue: Queue.Queue - queue of integers of input size
     :param result_queue: Queue.Queue - empty queue to put ProfileResults to
+    :param sort_order: str - ["random"|"ascending"|"descending"]
     """
     while True:
         try:
             input_size = input_size_queue.get(block=False)
-            func_args = get_random_int_list(input_size)
+            func_args = get_int_list(input_size, sort_order)
             trace_result = trace_function(func, func_args)
             num_executed = num_executed_statements(trace_result)
             profile_result = ProfileResult(input_size, num_executed)
@@ -134,31 +158,39 @@ def _profile_worker(input_size_queue, result_queue):
             break
 
 
-def profile(func, num_runs, step):
+def profile(func, num_runs, step, sort_order):
     """
     Call function {num_run} times with input that increases by len {step} each run.
 
+    Calls with random, ascending, or descending input depending on sort_order.
+
     :param func: function
     :param num_runs: int
+    :param sort_order: str - ["random"|"ascending"|"descending"]
+    :return: ProfileResult[]
     """
     threads = []
     results = []
     input_size_queue = Queue.Queue()
     result_queue = Queue.Queue()
 
+    # populate input_size_queue with input lengths to profile for
     for run in xrange(1, num_runs + 1):
         input_size = run * step
         input_size_queue.put(input_size)
 
+    # start {NUM_THREADS} profile workers
     for _ in xrange(NUM_THREADS):
         thread = threading.Thread(
-            target=_profile_worker, args=[input_size_queue, result_queue])
+            target=_profile_worker, args=[input_size_queue, result_queue, sort_order])
         thread.start()
         threads.append(thread)
 
+    # wait for threads to finish
     for thread in threads:
         thread.join()
 
+    # pull ProfileResults from result_queue and put to list until queue is empty
     while True:
         try:
             result = result_queue.get(block=False)
@@ -195,9 +227,21 @@ if __name__ == '__main__':
 
     save_path = args.module + '.png'
     func = _get_function_from_module(args.module, args.function)
-    profile_results = profile(func, args.num_runs, args.step)
-    result_dataframe = profile_results_to_dataframe(profile_results)
-    plot(result_dataframe, save_path)
+
+    results = {
+        'best_case': profile(func, args.num_runs, args.step, 'ascending'),
+        'worst_case': profile(func, args.num_runs, args.step, 'descending'),
+        'random': profile(func, args.num_runs, args.step, 'random'),
+    }
+
+    result_dataframe = profile_results_to_dataframe(**results)
+    mapping = {
+        'x': INPUT_MEASURE_NAME,
+        'y': COMPLEXITY_MEASURE_NAME,
+        'color': CASE_NAME,
+    }
+
+    plot(result_dataframe, title=args.module, save_path=save_path, **mapping)
 
     print result_dataframe
     print 'plot saved to {}'.format(save_path)
