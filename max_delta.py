@@ -11,15 +11,14 @@ def max_delta(int_list):
 
     Runtime: f(n) = O(n)
     """
-    if len(int_list) < 2:
-        raise Exception('requires at least two elements to find a delta')
+    if len(int_list) == 1:
+        return MaxDelta(delta=0, start_idx=0, end_idx=0)
 
     current_low_idx = 0
     current_high_idx = 1
 
-    max_low_idx = current_low_idx
-    max_high_idx = current_high_idx
-    max_delta = int_list[max_high_idx] - int_list[max_low_idx]
+    start_delta = int_list[current_high_idx] - int_list[current_low_idx]
+    max_delta = MaxDelta(start_delta, current_low_idx, current_high_idx)
 
     for current_idx, val in enumerate(int_list):
 
@@ -28,22 +27,26 @@ def max_delta(int_list):
             continue
 
         # if value is greater than one we've seen before, update current_high_idx
-        if current_high_idx is None or val > int_list[current_high_idx]:
+        if val > int_list[current_high_idx]:
             current_high_idx = current_idx
 
             # if we've found a new current_high_idx, check if we've found a new max_delta
             current_delta = int_list[current_high_idx] - int_list[current_low_idx]
-            if current_delta > max_delta:
-                max_high_idx = current_high_idx
-                max_low_idx = current_low_idx
-                max_delta = current_delta
+            if current_delta > max_delta.delta:
+                max_delta = MaxDelta(current_delta, current_low_idx, current_high_idx)
 
         # if value is lower than one we've seen before, update current_low_idx
         elif val < int_list[current_low_idx]:
             current_low_idx = current_idx
-            current_high_idx = None
 
-    return MaxDelta(max_delta, max_low_idx, max_high_idx)
+            # ensure max_delta is found even if all elements are decreasing
+            # to allow max_deltas where start_idx and end_idx are the same, where delta
+            # would always be 0, don't subtract 1 from currend_idx below
+            incremental_delta = int_list[current_idx] - int_list[current_idx - 1]
+            if incremental_delta > max_delta.delta:
+                max_delta = MaxDelta(incremental_delta, current_idx - 1, current_idx)
+
+    return max_delta
 
 
 class Tests(unittest.TestCase):
@@ -56,8 +59,8 @@ class Tests(unittest.TestCase):
         assert max_delta(int_list) == expected
 
     def test_max_delta__all_decreasing(self):
-        """Assert result is smallest negative delta if all elements are negative."""
-        int_list = [9, 2, 2, 0, -1, -3]
+        """Assert result is smallest negative delta if all elements are decreasing."""
+        int_list = [9, 4, 2, 0, -1, -3]
         expected = MaxDelta(-1, 3, 4)
         assert max_delta(int_list) == expected
 

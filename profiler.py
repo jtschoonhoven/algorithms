@@ -215,8 +215,8 @@ def profile_and_plot(func, num_runs=None, step=None, title=None, save_path=None)
     :return: None
     """
     results = {
-        'best_case': profile(func, num_runs, step, 'ascending'),
-        'worst_case': profile(func, num_runs, step, 'descending'),
+        'ascending': profile(func, num_runs, step, 'ascending'),
+        'descending': profile(func, num_runs, step, 'descending'),
         'random': profile(func, num_runs, step, 'random'),
     }
 
