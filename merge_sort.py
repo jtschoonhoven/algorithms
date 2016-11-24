@@ -1,4 +1,3 @@
-import unittest
 
 
 def _merge(left_list, right_list):

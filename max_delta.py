@@ -1,5 +1,4 @@
 from collections import namedtuple
-import unittest
 
 
 MaxDelta = namedtuple('MaxDelta', ('delta', 'start_idx', 'end_idx'))
@@ -49,7 +48,7 @@ def max_delta(int_list):
     return max_delta
 
 
-class Tests(unittest.TestCase):
+class Tests():
 
     def test_max_delta__all_increasing(self):
         """Assert result spans full list if all elements are increasing."""

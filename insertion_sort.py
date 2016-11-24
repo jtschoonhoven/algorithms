@@ -1,4 +1,3 @@
-import unittest
 
 
 def insertion_sort(int_list):
@@ -25,7 +24,7 @@ def insertion_sort(int_list):
     return int_list
 
 
-class Tests(unittest.TestCase):
+class Tests():
 
     def test_sort__increasing(self):
         int_list = [1, 2, 3]

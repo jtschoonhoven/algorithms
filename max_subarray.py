@@ -1,5 +1,4 @@
 from collections import namedtuple
-import unittest
 
 
 MaxSubarray = namedtuple('MaxSubarray', ('sum', 'start_idx', 'end_idx'))
@@ -40,7 +39,7 @@ def max_subarray(int_list):
     return MaxSubarray(max_sum, max_start_idx, max_end_idx)
 
 
-class Tests(unittest.TestCase):
+class Tests():
 
     def test_max_subarray__all_positive(self):
         """Assert returns full list if all elements are positive."""
