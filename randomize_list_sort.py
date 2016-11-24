@@ -37,8 +37,8 @@ def randomize_list_sort(int_list):
 class Test(object):
 
     def test_is_random(self):
-        list_1 = range(1000)
-        list_2 = range(1000)
+        list_1 = range(999)
+        list_2 = range(999)
 
         random_list_1 = randomize_list_sort(list_1)
         random_list_2 = randomize_list_sort(list_2)
